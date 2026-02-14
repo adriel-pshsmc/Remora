@@ -47,6 +47,11 @@
       const [qrSku, setQrSku] = useState("");
       const [qrCode, setQrCode] = useState(null);
       const [qrLoading, setQrLoading] = useState(false);
+      const [aiLoading, setAiLoading] = useState(false);
+      const [aiResult, setAiResult] = useState(null);
+      const [chainAnalysis, setChainAnalysis] = useState(null);
+      const [routeInputAI, setRouteInputAI] = useState('1600 Amphitheatre Parkway, Mountain View, CA\n1 Infinite Loop, Cupertino, CA');
+      const [routeResultAI, setRouteResultAI] = useState(null);
 
       async function handleSubmit(e) {
         e.preventDefault();
@@ -130,15 +135,89 @@
           setQrCode(result);
         } catch (err) {
           console.warn('QR generation failed', err);
-          // Demo QR response
+          // Demo QR response: generate deterministic SVG locally
+          const svgDataUrl = createDemoQRDataURL(qrSku || 'demo-sku', 240, 21);
           setQrCode({
             sku: qrSku,
             sku_hash: hashSimple(qrSku),
-            qr_code_base64: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='white' width='200' height='200'/%3E%3Ctext x='50%' y='50%' font-size='16' text-anchor='middle' dominant-baseline='middle'%3E[QR Demo]%3C/text%3E%3C/svg%3E",
-            message: "Demo QR (backend unavailable)"
+            qr_code_base64: svgDataUrl,
+            message: "Demo QR (generated locally)"
           });
         } finally {
           setQrLoading(false);
+        }
+      }
+
+      async function handleAnalyzeSKU_AI() {
+        setAiLoading(true);
+        setAiResult(null);
+        const data = {
+          sku: sku || "SKU-" + Date.now(),
+          monthly_sales: parseInt(monthlySales) || 0,
+          stock_level: parseInt(stockLevel) || 0,
+          lead_time_days: parseInt(leadTime) || 0,
+          price: parseFloat(price) || 0,
+          warehouse,
+          product_category: category,
+          supplier_reliability: parseFloat(supplierReliability) || 0.7,
+          demand_variance: parseFloat(demandVariance) || 0.3,
+          historical_stockouts: parseInt(historicalStockouts) || 0,
+          action: "Inventory Update"
+        };
+        try {
+          const res = await fetch("http://localhost:5000/api/analyze_skus", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ skus: [data] })
+          });
+          const j = await res.json();
+          setAiResult(j);
+        } catch (e) {
+          setAiResult({ error: String(e), demo: true });
+        } finally {
+          setAiLoading(false);
+        }
+      }
+
+      async function handleAnalyzeChain_AI() {
+        setAiLoading(true);
+        setChainAnalysis(null);
+        try {
+          const res = await fetch("http://localhost:5000/api/analyze_blockchain");
+          const j = await res.json();
+          setChainAnalysis(j);
+        } catch (e) {
+          setChainAnalysis({ error: String(e), demo: true });
+        } finally {
+          setAiLoading(false);
+        }
+      }
+
+      async function handleOptimizeRoute_AI() {
+        setAiLoading(true);
+        setRouteResultAI(null);
+        // accept newline-separated addresses
+        const lines = routeInputAI.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length === 0) { setRouteResultAI({ error: 'No addresses provided' }); setAiLoading(false); return; }
+        try {
+          const res = await fetch("http://localhost:5000/api/optimize_route_addresses", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ addresses: lines })
+          });
+          if (!res.ok) {
+            const text = await res.text().catch(() => null);
+            console.error('OptimizeRoute response not ok', res.status, text);
+            setRouteResultAI({ error: `HTTP ${res.status}`, body: text });
+          } else {
+            const j = await res.json();
+            setRouteResultAI(j);
+          }
+        } catch (e) {
+          console.error('Fetch error optimizing route', e);
+          setRouteResultAI({ error: String(e), demo: true });
+        } finally {
+          setAiLoading(false);
         }
       }
 
@@ -149,6 +228,37 @@
           hash = hash & hash;
         }
         return Math.abs(hash).toString(16).padStart(64, '0').substring(0, 64);
+      }
+
+      function createDemoQRDataURL(text, size = 200, modules = 21) {
+        // create a deterministic pseudo-QR pattern from text
+        const hash = hashSimple(text || 'demo');
+        // build matrix from hash hex digits
+        const bits = [];
+        for (let i = 0; i < hash.length; i++) {
+          const nib = parseInt(hash[i], 16);
+          for (let b = 0; b < 4; b++) bits.push((nib >> b) & 1);
+        }
+        // create SVG grid
+        const moduleSize = Math.floor(size / modules);
+        const realSize = moduleSize * modules;
+        let svg = `<?xml version="1.0" encoding="UTF-8"?>`;
+        svg += `<svg xmlns="http://www.w3.org/2000/svg" width="${realSize}" height="${realSize}" viewBox="0 0 ${realSize} ${realSize}">`;
+        svg += `<rect width="100%" height="100%" fill="white"/>`;
+        let bitIndex = 0;
+        for (let y = 0; y < modules; y++) {
+          for (let x = 0; x < modules; x++) {
+            const on = bits[bitIndex % bits.length] === 1;
+            if (on) {
+              const rx = x * moduleSize;
+              const ry = y * moduleSize;
+              svg += `<rect x="${rx}" y="${ry}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`;
+            }
+            bitIndex++;
+          }
+        }
+        svg += `</svg>`;
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
       }
 
       return (
@@ -259,6 +369,38 @@
               )}
             </div>
           )}
+
+          {/* AI Integration Panels */}
+          <div style={{marginTop:20}}>
+            <h2>AI Analysis</h2>
+            <p>Use the AI endpoints to analyze this SKU, the blockchain, or optimize routes.</p>
+            <div style={{marginTop:10}}>
+              <button onClick={handleAnalyzeSKU_AI} disabled={aiLoading}>{aiLoading ? 'Analyzing...' : 'Analyze This SKU (AI)'}</button>
+            </div>
+            <div style={{marginTop:10}}>
+              <button onClick={handleAnalyzeChain_AI} disabled={aiLoading}>{aiLoading ? 'Analyzing...' : 'Analyze Blockchain (AI)'}</button>
+            </div>
+            <div style={{marginTop:10}}>
+              <label>Route JSON:</label><br/>
+              <textarea value={routeInputAI} onChange={e => setRouteInputAI(e.target.value)} style={{minHeight:80}} />
+              <div style={{marginTop:6}}>
+                <button onClick={handleOptimizeRoute_AI} disabled={aiLoading}>{aiLoading ? 'Optimizing...' : 'Optimize Route (AI)'}</button>
+              </div>
+            </div>
+
+            <div style={{marginTop:12}}>
+              <h3>AI SKU Result</h3>
+              <pre>{aiResult ? JSON.stringify(aiResult, null, 2) : 'No AI SKU analysis yet.'}</pre>
+            </div>
+            <div style={{marginTop:12}}>
+              <h3>AI Blockchain Result</h3>
+              <pre>{chainAnalysis ? JSON.stringify(chainAnalysis, null, 2) : 'No blockchain analysis yet.'}</pre>
+            </div>
+            <div style={{marginTop:12}}>
+              <h3>AI Route Result</h3>
+              <pre>{routeResultAI ? JSON.stringify(routeResultAI, null, 2) : 'No route result yet.'}</pre>
+            </div>
+          </div>
 
           <div className="separator">
             <h2>QR Code Generator</h2>

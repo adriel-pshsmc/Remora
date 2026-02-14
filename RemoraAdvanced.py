@@ -1,7 +1,8 @@
 # RemoraAdvanced.py - Enhanced AI with recommendation engine
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import hashlib, datetime, json, os
+import traceback
+import hashlib, datetime, json, os, requests, time
 import pandas as pd
 import numpy as np
 import joblib
@@ -10,6 +11,10 @@ from sklearn.preprocessing import StandardScaler
 import qrcode
 from io import BytesIO
 import base64
+try:
+    import remora_gemini as gemini
+except Exception:
+    gemini = None
 
 # -------- Blockchain Classes --------
 class Block:
@@ -176,7 +181,16 @@ scaler = StandardScaler()
 
 # -------- Flask App --------
 app = Flask(__name__)
-CORS(app)
+# Allow CORS for API routes from any origin (helpful for file:// or local dev)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+
+@app.before_request
+def log_request_info():
+    try:
+        print(f"[REQ] {request.method} {request.path} from {request.remote_addr}")
+    except Exception:
+        pass
 
 def heuristic_risk_prediction(features_df):
     """
@@ -360,6 +374,200 @@ def generate_qr_sku():
         "qr_code_base64": f"data:image/png;base64,{img_base64}"
     }
     return jsonify(response)
+
+
+@app.route('/api/analyze_skus', methods=['POST'])
+def analyze_skus_endpoint():
+    data = request.json or {}
+    skus = data.get('skus') if isinstance(data.get('skus'), list) else data.get('skus', [])
+    if gemini is None:
+        return jsonify({"error": "Gemini helper not available", "mock": True}), 200
+    try:
+        return jsonify(gemini.analyze_skus(skus))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/analyze_blockchain', methods=['GET'])
+def analyze_blockchain_endpoint():
+    # Build a simple snapshot of chain
+    chain_snapshot = {
+        "length": len(remora_chain.chain),
+        "latest_block": remora_chain.get_latest_block().__dict__,
+        "valid": remora_chain.is_chain_valid()
+    }
+    if gemini is None:
+        return jsonify({"error": "Gemini helper not available", "mock": True, "snapshot": chain_snapshot}), 200
+    try:
+        return jsonify(gemini.analyze_blockchain_summary(chain_snapshot))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/optimize_route', methods=['POST'])
+def optimize_route_endpoint():
+    data = request.json or {}
+    stops = data.get('stops') if isinstance(data.get('stops'), list) else data.get('stops', [])
+    if gemini is None:
+        return jsonify({"error": "Gemini helper not available", "mock": True, "stops_count": len(stops)}), 200
+    try:
+        return jsonify(gemini.optimize_route(stops))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def geocode_address(address: str):
+    """Geocode a single address using Google Maps Geocoding API. Returns dict with lat/lng or None."""
+    api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+    if not api_key:
+        return None
+    try:
+        params = {'address': address, 'key': api_key}
+        resp = requests.get('https://maps.googleapis.com/maps/api/geocode/json', params=params, timeout=10)
+        if resp.status_code != 200:
+            return None
+        j = resp.json()
+        if j.get('status') != 'OK' or not j.get('results'):
+            return None
+        loc = j['results'][0]['geometry']['location']
+        return {'lat': loc['lat'], 'lng': loc['lng'], 'formatted_address': j['results'][0].get('formatted_address')}
+    except Exception as e:
+        print(f"Geocode error for '{address}': {e}")
+        return None
+
+
+@app.route('/api/optimize_route_addresses', methods=['POST'])
+def optimize_route_addresses():
+    """Accepts JSON `{ "addresses": ["addr1", "addr2", ...] }`, geocodes them, and calls the route optimizer."""
+    data = request.json or {}
+    addresses = data.get('addresses')
+    if not isinstance(addresses, list):
+        return jsonify({"error": "addresses must be a list of strings"}), 400
+
+    api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+    if not api_key:
+        # graceful fallback when key missing
+        geocoded = []
+        for a in addresses:
+            geocoded.append({"address": a, "lat": None, "lng": None})
+        return jsonify({"error": "GOOGLE_MAPS_API_KEY not set", "mock": True, "stops": geocoded}), 200
+
+    geocoded_stops = []
+    for addr in addresses:
+        if not isinstance(addr, str) or not addr.strip():
+            return jsonify({"error": f"Invalid address: {addr}"}), 400
+        g = geocode_address(addr)
+        if g is None:
+            return jsonify({"error": f"Could not geocode address: {addr}"}), 400
+        geocoded_stops.append({"address": g.get('formatted_address') or addr, "lat": g['lat'], "lng": g['lng']})
+
+    # If no API key, return mock
+    if not api_key:
+        if gemini is None:
+            return jsonify({"error": "GOOGLE_MAPS_API_KEY not set", "mock": True, "stops": geocoded_stops}), 200
+        try:
+            return jsonify(gemini.optimize_route(geocoded_stops))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # Build distance/time matrix using Google Distance Matrix with traffic awareness
+    def build_time_matrix(stops):
+        coords = [f"{s['lat']},{s['lng']}" for s in stops]
+        origins = "|".join(coords)
+        destinations = origins
+        params = {
+            'origins': origins,
+            'destinations': destinations,
+            'key': api_key,
+            'departure_time': int(time.time()),
+            'traffic_model': 'best_guess'
+        }
+        try:
+            resp = requests.get('https://maps.googleapis.com/maps/api/distancematrix/json', params=params, timeout=15)
+            if resp.status_code != 200:
+                print('Distance Matrix HTTP', resp.status_code, resp.text)
+                return None
+            j = resp.json()
+            if j.get('status') != 'OK':
+                print('Distance Matrix status', j.get('status'))
+                return None
+            matrix = []
+            rows = j.get('rows', [])
+            for i, row in enumerate(rows):
+                elems = row.get('elements', [])
+                row_times = []
+                for e in elems:
+                    # prefer duration_in_traffic when available
+                    t = None
+                    if isinstance(e, dict):
+                        if e.get('status') == 'OK':
+                            if e.get('duration_in_traffic'):
+                                t = e['duration_in_traffic'].get('value')
+                            elif e.get('duration'):
+                                t = e['duration'].get('value')
+                    row_times.append(t if t is not None else float('inf'))
+                matrix.append(row_times)
+            return matrix
+        except Exception as ex:
+            print('Distance Matrix error', ex)
+            return None
+
+    time_matrix = build_time_matrix(geocoded_stops)
+    if time_matrix is None:
+        # fallback to gemini optimizer if available
+        if gemini is not None:
+            try:
+                return jsonify(gemini.optimize_route(geocoded_stops))
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Could not build time matrix and no optimizer available"}), 500
+
+    # Simple nearest-neighbor greedy TSP using travel time (traffic-aware)
+    n = len(geocoded_stops)
+    visited = [False] * n
+    order = []
+    current = 0
+    order.append(current)
+    visited[current] = True
+    total_seconds = 0
+    for _ in range(n - 1):
+        best = None
+        best_time = float('inf')
+        for j, v in enumerate(visited):
+            if not v:
+                t = time_matrix[current][j]
+                if t < best_time:
+                    best_time = t
+                    best = j
+        if best is None:
+            break
+        order.append(best)
+        visited[best] = True
+        if best_time != float('inf'):
+            total_seconds += best_time
+        current = best
+
+    ordered_stops = [geocoded_stops[i] for i in order]
+    total_minutes = round(total_seconds / 60, 1)
+
+    result = {
+        'mode': 'traffic_aware',
+        'order': order,
+        'ordered_stops': ordered_stops,
+        'total_travel_time_seconds': total_seconds,
+        'total_travel_time_minutes': total_minutes,
+        'time_matrix_sample': time_matrix
+    }
+
+    # Optionally augment with Gemini explanation
+    if gemini is not None:
+        try:
+            explanation = gemini.optimize_route(ordered_stops)
+            result['gemini_explanation'] = explanation
+        except Exception:
+            pass
+
+    return jsonify(result)
 
 if __name__ == '__main__':
     print("\n" + "="*60)
