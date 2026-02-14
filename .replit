@@ -1,0 +1,2 @@
+run = "bash scripts/start-replit.sh"
+language = "bash"
