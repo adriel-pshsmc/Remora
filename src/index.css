@@ -1,0 +1,111 @@
+:root {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Manrope', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --background: 216 6% 15%; /* #25272A */
+  --foreground: 210 20% 98%;
+
+  --card: 215 10% 18%;
+  --card-foreground: 210 20% 98%;
+
+  --popover: 215 10% 18%;
+  --popover-foreground: 210 20% 98%;
+
+  --primary: 199 89% 48%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 215 15% 25%;
+  --secondary-foreground: 210 20% 98%;
+
+  --muted: 215 15% 25%;
+  --muted-foreground: 215 20% 65%;
+
+  --accent: 199 89% 48%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 210 20% 98%;
+
+  --border: 215 15% 25%;
+  --input: 215 15% 25%;
+  --ring: 199 89% 48%;
+
+  --radius: 0.5rem;
+
+  --chart-1: 199 89% 48%;
+  --chart-2: 173 80% 40%;
+  --chart-3: 280 65% 60%;
+  --chart-4: 43 96% 64%;
+  --chart-5: 12 76% 61%;
+
+  --sidebar: 216 6% 13%;
+  --sidebar-foreground: 210 20% 98%;
+  --sidebar-primary: 199 89% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 215 15% 25%;
+  --sidebar-accent-foreground: 210 20% 98%;
+  --sidebar-border: 215 15% 25%;
+  --sidebar-ring: 199 89% 48%;
+  
+  --risk-low: 142 71% 75%;
+  --risk-medium: 48 96% 75%;
+  --risk-high: 0 94% 82%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans, 'Inter', sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display, 'Manrope', sans-serif);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.glass {
+  background-color: rgba(37, 39, 42, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.glass-card {
+  background-color: rgba(34, 35, 36, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.marker-pulse::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: inherit;
+  border-radius: 50%;
+  z-index: -1;
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
