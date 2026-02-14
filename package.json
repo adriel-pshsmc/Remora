@@ -1,0 +1,21 @@
+{
+  "name": "remora-logistics",
+  "version": "1.0.0",
+  "description": "LogiSmart AI Optimizer - Logistics & SKU Management",
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "serve": "serve .",
+    "dev": "esbuild index.tsx --bundle --outfile=dist/index.js --loader:.tsx=tsx --platform=browser --format=esm --external:react --external:react-dom --external:@google/genai --external:recharts --watch"
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "@google/genai": "^1.41.0",
+    "recharts": "^3.7.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0",
+    "serve": "^14.2.0"
+  }
+}

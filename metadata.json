@@ -1,0 +1,7 @@
+{
+  "name": "LogiSmart SKU & Route Optimizer",
+  "description": "An enterprise-grade logistics command center that leverages Gemini AI to analyze SKU inventory health, optimize shipping routes, and mitigate supply chain risks.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
