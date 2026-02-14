@@ -1,0 +1,7 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+alembic==1.12.1
+requests==2.31.0
+# bigchaindb-driver==0.6.2  # Commented out for mock
+python-multipart==0.0.6
