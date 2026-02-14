@@ -26,7 +26,7 @@ The blockchain code presently uses a past project's initial template, which is B
 ```bash
 # Clone the repo
 git clone <repo-url>
-cd remora
+cd Remora
 
 # Start all services
 docker-compose up --build
