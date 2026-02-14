@@ -8,8 +8,33 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# Ensure logs directory exists
+# Ensure logs and run directories exist
 mkdir -p "$ROOT_DIR/logs"
+mkdir -p "$ROOT_DIR/run"
+
+# --- Ensure Python venvs and dependencies are installed (idempotent) ---
+# BigChainDB mock venv + deps
+if [ ! -x "$ROOT_DIR/bigchaindb/venv/bin/python" ]; then
+  echo "Creating venv for bigchaindb and installing dependencies..."
+  python3 -m venv "$ROOT_DIR/bigchaindb/venv"
+  if [ -f "$ROOT_DIR/bigchaindb/requirements.txt" ]; then
+    "$ROOT_DIR/bigchaindb/venv/bin/pip" install -r "$ROOT_DIR/bigchaindb/requirements.txt" || true
+  else
+    "$ROOT_DIR/bigchaindb/venv/bin/pip" install flask || true
+  fi
+fi
+
+# Backend venv + deps
+if [ ! -x "$ROOT_DIR/backend/venv/bin/python" ]; then
+  echo "Creating venv for backend and installing dependencies..."
+  python3 -m venv "$ROOT_DIR/backend/venv"
+  if [ -f "$ROOT_DIR/backend/requirements.txt" ]; then
+    "$ROOT_DIR/backend/venv/bin/pip" install -r "$ROOT_DIR/backend/requirements.txt" || true
+  else
+    # fallback minimal deps
+    "$ROOT_DIR/backend/venv/bin/pip" install fastapi uvicorn requests "sqlalchemy<2.0" || true
+  fi
+fi
 
 echo "Starting BigChainDB mock (background)..."
 # start mock on 9984 in background; use venv if present
@@ -23,7 +48,7 @@ nohup "$BIGCHAINDB_PY" "$ROOT_DIR/bigchaindb/main.py" >> "$ROOT_DIR/logs/bigchai
 echo $! > "$ROOT_DIR/run/bigchaindb.pid" || true
 
 # Wait a short moment for mock to start
-sleep 0.8
+sleep 1
 
 echo "Starting backend on port ${PORT:-8000}..."
 cd "$ROOT_DIR/backend"

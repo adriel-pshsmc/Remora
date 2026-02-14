@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import requests
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-# from bigchaindb_driver import BigchainDB  # Commented out for mock
 import os
 
 app = FastAPI(title="Remora Backend API")
@@ -30,6 +31,20 @@ class User(Base):
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+
+# BigChainDB configuration
+BIGCHAINDB_URL = os.getenv("BIGCHAINDB_URL", "http://127.0.0.1:9984")
+USE_BDB_MOCK = os.getenv("USE_BDB_MOCK", "1") in ("1", "true", "True")
+
+
+class TxInput(BaseModel):
+    asset: dict
+    metadata: dict
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 # BigChainDB mock (for development)
 # bdb = BigchainDB('http://localhost:9984')
@@ -67,6 +82,29 @@ def get_data():
         "users": user_data,
         "blockchain_status": blockchain_status
     }
+
+
+@app.post("/api/tx")
+def create_tx(tx: TxInput):
+    """Create a blockchain transaction via the BigChainDB mock or real node."""
+    try:
+        url = f"{BIGCHAINDB_URL}/api/v1/transactions"
+        resp = requests.post(url, json=tx.dict(), timeout=5)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Error contacting BigChainDB: {e}")
+
+
+@app.get("/api/blocks")
+def get_blocks():
+    try:
+        url = f"{BIGCHAINDB_URL}/api/v1/blocks"
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Error contacting BigChainDB: {e}")
 
 @app.post("/api/users")
 def create_user(name: str):
