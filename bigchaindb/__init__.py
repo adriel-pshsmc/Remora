@@ -1,1 +1,0 @@
-# BigChainDB Remora Node Package
