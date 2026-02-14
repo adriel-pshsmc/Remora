@@ -34,6 +34,10 @@ Base.metadata.create_all(bind=engine)
 # BigChainDB mock (for development)
 # bdb = BigchainDB('http://localhost:9984')
 
+@app.get("/test")
+def test():
+    return {"message": "test endpoint works"}
+
 @app.get("/api/data")
 def get_data():
     # Get data from SQL DB
@@ -44,8 +48,20 @@ def get_data():
     finally:
         db.close()
 
-    # Example BigChainDB interaction (placeholder)
-    blockchain_status = "connected"  # In real app, check connection
+    # Connect to mock BigChainDB node
+    try:
+        import requests
+        response = requests.get('http://localhost:9984/')
+        print(f"BigChainDB response status: {response.status_code}")
+        print(f"BigChainDB response: {response.text}")
+        if response.status_code == 200:
+            bc_data = response.json()
+            blockchain_status = f"connected - {bc_data.get('blocks', 0)} blocks, {bc_data.get('pending_transactions', 0)} pending tx"
+        else:
+            blockchain_status = "error connecting to node"
+    except Exception as e:
+        print(f"BigChainDB error: {e}")
+        blockchain_status = "mock_connected"
 
     return {
         "users": user_data,
