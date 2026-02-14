@@ -1,0 +1,486 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Remora Advanced SKU Tracker</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    input, select { margin: 6px 0; padding: 6px; width: 250px; }
+    button { padding: 8px 12px; margin-right: 5px; }
+    .response { margin-top: 16px; padding: 10px; border: 1px solid #ddd; background: #fafafa; }
+    .error { color: orange; margin-top: 10px; }
+    .drivers { margin: 10px 0; padding: 10px; background: #e8f4ff; }
+    .recommendations { margin-top: 15px; }
+    .rec-item { margin: 10px 0; padding: 10px; border-left: 3px solid #999; background: #f5f5f5; }
+    .rec-item.high { border-left-color: #e74c3c; background: #fff5f5; }
+    .rec-item.medium { border-left-color: #f39c12; background: #fffaf5; }
+    .rec-item.low { border-left-color: #3498db; background: #f0f8ff; }
+    .separator { margin: 30px 0; border-top: 2px solid #ddd; padding-top: 20px; }
+    .qr-container { margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; }
+    .qr-image { max-width: 300px; margin-top: 15px; border: 1px solid #ccc; padding: 10px; background: white; }
+    .hash-display { font-family: monospace; word-break: break-all; background: #f0f0f0; padding: 10px; margin-top: 10px; font-size: 12px; }
+  </style>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function App() {
+      const [sku, setSku] = useState("");
+      const [monthlySales, setMonthlySales] = useState("");
+      const [stockLevel, setStockLevel] = useState("");
+      const [leadTime, setLeadTime] = useState("");
+      const [price, setPrice] = useState("");
+      const [warehouse, setWarehouse] = useState("Manila");
+      const [category, setCategory] = useState("Electronics");
+      const [supplierReliability, setSupplierReliability] = useState("0.85");
+      const [demandVariance, setDemandVariance] = useState("0.2");
+      const [historicalStockouts, setHistoricalStockouts] = useState("");
+      const [response, setResponse] = useState(null);
+      const [error, setError] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [backendAvailable, setBackendAvailable] = useState(false);
+      const [forceBackend, setForceBackend] = useState(false);
+      const [qrSku, setQrSku] = useState("");
+      const [qrCode, setQrCode] = useState(null);
+      const [qrLoading, setQrLoading] = useState(false);
+      const [aiLoading, setAiLoading] = useState(false);
+      const [aiResult, setAiResult] = useState(null);
+      const [chainAnalysis, setChainAnalysis] = useState(null);
+      const [routeInputAI, setRouteInputAI] = useState('1600 Amphitheatre Parkway, Mountain View, CA\n1 Infinite Loop, Cupertino, CA');
+      const [routeResultAI, setRouteResultAI] = useState(null);
+
+      useEffect(() => {
+        // ping backend health on load
+        (async function(){
+          try {
+            const res = await fetch('http://localhost:5000/health');
+            if (res.ok) setBackendAvailable(true);
+          } catch (e) {
+            setBackendAvailable(false);
+          }
+        })();
+      }, []);
+
+      async function handleSubmit(e) {
+        e.preventDefault();
+        setError(null);
+        setLoading(true);
+        
+        const data = {
+          sku: sku || "SKU-" + Date.now(),
+          monthly_sales: parseInt(monthlySales) || 0,
+          stock_level: parseInt(stockLevel) || 0,
+          lead_time_days: parseInt(leadTime) || 0,
+          price: parseFloat(price) || 0,
+          warehouse,
+          product_category: category,
+          supplier_reliability: parseFloat(supplierReliability) || 0.7,
+          demand_variance: parseFloat(demandVariance) || 0.3,
+          historical_stockouts: parseInt(historicalStockouts) || 0,
+          action: "Inventory Update"
+        };
+
+        if (!(backendAvailable || forceBackend)) {
+          // skip network attempt if backend definitely unavailable
+          setResponse({
+            message: "SKU added to blockchain with advanced insights (demo)",
+            block_index: "demo-1",
+            block_hash: "demo-hash-" + Date.now(),
+            high_risk: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? 1 : 0,
+            risk_probability: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? 0.72 : 0.28,
+            risk_percentage: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? "72%" : "28%",
+            top_risk_drivers: ["Long lead time", "Low safety stock"],
+            recommendations: [
+              { priority: "high", action: "Increase stock by 45%", reason: "Long lead time requires buffer", estimated_cost: "$5,400" },
+              { priority: "medium", action: "Enable real-time monitoring", reason: "Risk score 72%", estimated_cost: "Low" }
+            ]
+          });
+          setError("Using demo response (backend unavailable)");
+          setLoading(false);
+        } else {
+          try {
+            const res = await fetch("http://localhost:5000/api/add_sku", {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(()=>null);
+              setError(`Backend error: HTTP ${res.status}`);
+              setResponse({ error: text });
+            } else {
+              const result = await res.json();
+              setResponse(result);
+              setError(null);
+            }
+          } catch (err) {
+            console.error('Network error add_sku', err);
+            setError('Network error when contacting backend; using demo — ' + String(err));
+            setResponse({
+              message: "SKU added to blockchain with advanced insights (demo)",
+              block_index: "demo-1",
+              block_hash: "demo-hash-" + Date.now(),
+              high_risk: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? 1 : 0,
+              risk_probability: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? 0.72 : 0.28,
+              risk_percentage: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? "72%" : "28%",
+              top_risk_drivers: ["Long lead time", "Low safety stock"],
+              recommendations: [
+                { priority: "high", action: "Increase stock by 45%", reason: "Long lead time requires buffer", estimated_cost: "$5,400" },
+                { priority: "medium", action: "Enable real-time monitoring", reason: "Risk score 72%", estimated_cost: "Low" }
+              ]
+            });
+          } finally {
+            setLoading(false);
+          }
+        }
+      }
+
+      function handleReset() {
+        setSku("");
+        setMonthlySales("");
+        setStockLevel("");
+        setLeadTime("");
+        setPrice("");
+        setWarehouse("Manila");
+        setCategory("Electronics");
+        setSupplierReliability("0.85");
+        setDemandVariance("0.2");
+        setHistoricalStockouts("");
+        setResponse(null);
+        setError(null);
+      }
+
+      async function handleGenerateQR() {
+        if (!qrSku) {
+          alert("Please enter an SKU");
+          return;
+        }
+        setQrLoading(true);
+        try {
+          const res = await fetch("http://localhost:5000/api/generate_qr_sku", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ sku: qrSku })
+          });
+          if (!res.ok) throw new Error('Failed to generate QR');
+          const result = await res.json();
+          setQrCode(result);
+        } catch (err) {
+          console.warn('QR generation failed', err);
+          // Demo QR response: generate deterministic SVG locally
+          const svgDataUrl = createDemoQRDataURL(qrSku || 'demo-sku', 240, 21);
+          setQrCode({
+            sku: qrSku,
+            sku_hash: hashSimple(qrSku),
+            qr_code_base64: svgDataUrl,
+            message: "Demo QR (generated locally)"
+          });
+        } finally {
+          setQrLoading(false);
+        }
+      }
+
+      async function handleAnalyzeSKU_AI() {
+        setAiLoading(true);
+        setAiResult(null);
+        const data = {
+          sku: sku || "SKU-" + Date.now(),
+          monthly_sales: parseInt(monthlySales) || 0,
+          stock_level: parseInt(stockLevel) || 0,
+          lead_time_days: parseInt(leadTime) || 0,
+          price: parseFloat(price) || 0,
+          warehouse,
+          product_category: category,
+          supplier_reliability: parseFloat(supplierReliability) || 0.7,
+          demand_variance: parseFloat(demandVariance) || 0.3,
+          historical_stockouts: parseInt(historicalStockouts) || 0,
+          action: "Inventory Update"
+        };
+        try {
+          const res = await fetch("http://localhost:5000/api/analyze_skus", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ skus: [data] })
+          });
+          const j = await res.json();
+          setAiResult(j);
+        } catch (e) {
+          setAiResult({ error: String(e), demo: true });
+        } finally {
+          setAiLoading(false);
+        }
+      }
+
+      async function handleAnalyzeChain_AI() {
+        setAiLoading(true);
+        setChainAnalysis(null);
+        try {
+          const res = await fetch("http://localhost:5000/api/analyze_blockchain");
+          const j = await res.json();
+          setChainAnalysis(j);
+        } catch (e) {
+          setChainAnalysis({ error: String(e), demo: true });
+        } finally {
+          setAiLoading(false);
+        }
+      }
+
+      async function handleOptimizeRoute_AI() {
+        setAiLoading(true);
+        setRouteResultAI(null);
+        // accept newline-separated addresses
+        const lines = routeInputAI.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length === 0) { setRouteResultAI({ error: 'No addresses provided' }); setAiLoading(false); return; }
+        try {
+          const res = await fetch("http://localhost:5000/api/optimize_route_addresses", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ addresses: lines })
+          });
+          if (!res.ok) {
+            const text = await res.text().catch(() => null);
+            console.error('OptimizeRoute response not ok', res.status, text);
+            setRouteResultAI({ error: `HTTP ${res.status}`, body: text });
+          } else {
+            const j = await res.json();
+            setRouteResultAI(j);
+          }
+        } catch (e) {
+          console.error('Fetch error optimizing route', e);
+          setRouteResultAI({ error: String(e), demo: true });
+        } finally {
+          setAiLoading(false);
+        }
+      }
+
+      function hashSimple(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          hash = ((hash << 5) - hash) + str.charCodeAt(i);
+          hash = hash & hash;
+        }
+        return Math.abs(hash).toString(16).padStart(64, '0').substring(0, 64);
+      }
+
+      function createDemoQRDataURL(text, size = 200, modules = 21) {
+        // create a deterministic pseudo-QR pattern from text
+        const hash = hashSimple(text || 'demo');
+        // build matrix from hash hex digits
+        const bits = [];
+        for (let i = 0; i < hash.length; i++) {
+          const nib = parseInt(hash[i], 16);
+          for (let b = 0; b < 4; b++) bits.push((nib >> b) & 1);
+        }
+        // create SVG grid
+        const moduleSize = Math.floor(size / modules);
+        const realSize = moduleSize * modules;
+        let svg = `<?xml version="1.0" encoding="UTF-8"?>`;
+        svg += `<svg xmlns="http://www.w3.org/2000/svg" width="${realSize}" height="${realSize}" viewBox="0 0 ${realSize} ${realSize}">`;
+        svg += `<rect width="100%" height="100%" fill="white"/>`;
+        let bitIndex = 0;
+        for (let y = 0; y < modules; y++) {
+          for (let x = 0; x < modules; x++) {
+            const on = bits[bitIndex % bits.length] === 1;
+            if (on) {
+              const rx = x * moduleSize;
+              const ry = y * moduleSize;
+              svg += `<rect x="${rx}" y="${ry}" width="${moduleSize}" height="${moduleSize}" fill="black"/>`;
+            }
+            bitIndex++;
+          }
+        }
+        svg += `</svg>`;
+        return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      }
+
+      return (
+        <div>
+          <h1>Remora Advanced SKU Tracker</h1>
+          <p>AI-powered inventory risk assessment with blockchain integration</p>
+          <div style={{marginBottom:12}}>
+            <strong>Backend:</strong>&nbsp;
+            <span style={{color: backendAvailable ? 'green' : 'red'}}>{backendAvailable ? 'Available' : 'Unavailable'}</span>
+            &nbsp;&nbsp;
+            <label style={{fontSize:12}}><input type="checkbox" checked={forceBackend} onChange={e => setForceBackend(e.target.checked)} /> Force backend</label>
+          </div>
+          
+          <form onSubmit={handleSubmit}>
+            <div>
+              <label>SKU:</label><br/>
+              <input placeholder="e.g., SKU-123 (auto-gen if empty)" value={sku} onChange={e => setSku(e.target.value)} /><br/>
+            </div>
+
+            <div>
+              <label>Monthly Sales (units):</label><br/>
+              <input type="number" placeholder="800" value={monthlySales} onChange={e => setMonthlySales(e.target.value)} required /><br/>
+            </div>
+
+            <div>
+              <label>Stock Level (units):</label><br/>
+              <input type="number" placeholder="200" value={stockLevel} onChange={e => setStockLevel(e.target.value)} required /><br/>
+            </div>
+
+            <div>
+              <label>Lead Time (days):</label><br/>
+              <input type="number" placeholder="45" value={leadTime} onChange={e => setLeadTime(e.target.value)} required /><br/>
+            </div>
+
+            <div>
+              <label>Price ($):</label><br/>
+              <input type="number" step="0.01" placeholder="150" value={price} onChange={e => setPrice(e.target.value)} required /><br/>
+            </div>
+
+            <div>
+              <label>Warehouse:</label><br/>
+              <select value={warehouse} onChange={e => setWarehouse(e.target.value)}>
+                <option>Manila</option>
+                <option>Bangkok</option>
+                <option>Singapore</option>
+                <option>Jakarta</option>
+                <option>Ho Chi Minh</option>
+              </select><br/>
+            </div>
+
+            <div>
+              <label>Product Category:</label><br/>
+              <select value={category} onChange={e => setCategory(e.target.value)}>
+                <option>Electronics</option>
+                <option>Apparel</option>
+                <option>Food & Beverage</option>
+                <option>Furniture</option>
+                <option>Chemicals</option>
+              </select><br/>
+            </div>
+
+            <div>
+              <label>Supplier Reliability (0-1):</label><br/>
+              <input type="number" min="0" max="1" step="0.05" placeholder="0.85" value={supplierReliability} onChange={e => setSupplierReliability(e.target.value)} /><br/>
+            </div>
+
+            <div>
+              <label>Demand Variance (0-1):</label><br/>
+              <input type="number" min="0" max="1" step="0.05" placeholder="0.2" value={demandVariance} onChange={e => setDemandVariance(e.target.value)} /><br/>
+            </div>
+
+            <div>
+              <label>Historical Stockouts:</label><br/>
+              <input type="number" min="0" placeholder="0" value={historicalStockouts} onChange={e => setHistoricalStockouts(e.target.value)} /><br/>
+            </div>
+
+            <button type="submit" disabled={loading}>
+              {loading ? "Analyzing..." : "Analyze SKU"}
+            </button>
+            <button type="button" onClick={handleReset}>Clear</button>
+          </form>
+
+          {error && <div className="error">{error}</div>}
+
+          {response && (
+            <div className="response">
+              <h2>Results</h2>
+              <p><strong>Risk Percentage:</strong> {response.risk_percentage}</p>
+              <p><strong>Risk Probability:</strong> {response.risk_probability}</p>
+              <p><strong>High Risk:</strong> {response.high_risk === 1 ? "Yes" : "No"}</p>
+              <p><strong>Block Index:</strong> {response.block_index}</p>
+              <p><strong>Block Hash:</strong> {response.block_hash}</p>
+
+              {response.top_risk_drivers && response.top_risk_drivers.length > 0 && (
+                <div className="drivers">
+                  <strong>Top Risk Drivers:</strong><br/>
+                  {response.top_risk_drivers.map((driver, i) => (
+                    <span key={i}>{driver}{i < response.top_risk_drivers.length - 1 ? ", " : ""}</span>
+                  ))}
+                </div>
+              )}
+
+              {response.recommendations && response.recommendations.length > 0 && (
+                <div className="recommendations">
+                  <h3>Recommended Actions:</h3>
+                  {response.recommendations.map((rec, i) => (
+                    <div key={i} className={`rec-item ${rec.priority}`}>
+                      <strong>[{rec.priority.toUpperCase()}] {rec.action}</strong><br/>
+                      <em>Reason:</em> {rec.reason}<br/>
+                      <em>Est. Cost:</em> {rec.estimated_cost}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI Integration Panels */}
+          <div style={{marginTop:20}}>
+            <h2>AI Analysis</h2>
+            <p>Use the AI endpoints to analyze this SKU, the blockchain, or optimize routes.</p>
+            <div style={{marginTop:10}}>
+              <button onClick={handleAnalyzeSKU_AI} disabled={aiLoading}>{aiLoading ? 'Analyzing...' : 'Analyze This SKU (AI)'}</button>
+            </div>
+            <div style={{marginTop:10}}>
+              <button onClick={handleAnalyzeChain_AI} disabled={aiLoading}>{aiLoading ? 'Analyzing...' : 'Analyze Blockchain (AI)'}</button>
+            </div>
+            <div style={{marginTop:10}}>
+              <label>Route JSON:</label><br/>
+              <textarea value={routeInputAI} onChange={e => setRouteInputAI(e.target.value)} style={{minHeight:80}} />
+              <div style={{marginTop:6}}>
+                <button onClick={handleOptimizeRoute_AI} disabled={aiLoading}>{aiLoading ? 'Optimizing...' : 'Optimize Route (AI)'}</button>
+              </div>
+            </div>
+
+            <div style={{marginTop:12}}>
+              <h3>AI SKU Result</h3>
+              <pre>{aiResult ? JSON.stringify(aiResult, null, 2) : 'No AI SKU analysis yet.'}</pre>
+            </div>
+            <div style={{marginTop:12}}>
+              <h3>AI Blockchain Result</h3>
+              <pre>{chainAnalysis ? JSON.stringify(chainAnalysis, null, 2) : 'No blockchain analysis yet.'}</pre>
+            </div>
+            <div style={{marginTop:12}}>
+              <h3>AI Route Result</h3>
+              <pre>{routeResultAI ? JSON.stringify(routeResultAI, null, 2) : 'No route result yet.'}</pre>
+            </div>
+          </div>
+
+          <div className="separator">
+            <h2>QR Code Generator</h2>
+            <p>Generate a QR code from an SKU and convert it to a hash for encryption</p>
+          </div>
+
+          <div className="qr-container">
+            <div>
+              <label>Enter SKU to generate QR code:</label><br/>
+              <input placeholder="e.g., SKU-ABC-789" value={qrSku} onChange={e => setQrSku(e.target.value)} /><br/>
+            </div>
+            <button type="button" onClick={handleGenerateQR} disabled={qrLoading}>
+              {qrLoading ? "Generating..." : "Generate QR Code"}
+            </button>
+          </div>
+
+          {qrCode && (
+            <div className="response">
+              <h3>QR Code Generated</h3>
+              <p><strong>SKU:</strong> {qrCode.sku}</p>
+              <p><strong>SKU Hash (SHA-256):</strong></p>
+              <div className="hash-display">{qrCode.sku_hash}</div>
+              
+              <h4 style={{marginTop: "15px"}}>QR Code:</h4>
+              <img src={qrCode.qr_code_base64} alt="QR Code" className="qr-image" />
+              
+              <p style={{marginTop: "10px", fontSize: "12px", color: "#666"}}>
+                {qrCode.message}
+              </p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

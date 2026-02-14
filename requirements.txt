@@ -1,0 +1,10 @@
+flask
+flask-cors
+pandas
+numpy
+scikit-learn
+joblib
+qrcode
+requests
+# Optional for Gemini/Vertex AI integration
+# google-cloud-aiplatform
