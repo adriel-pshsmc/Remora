@@ -29,7 +29,7 @@ git clone <repo-url>
 cd remora
 
 # Start all services
-docker-compose up --build
+sudo docker-compose up --build
 
 # Access:
 # Frontend: http://localhost:5173
