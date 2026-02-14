@@ -28,7 +28,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
     function App() {
       const [sku, setSku] = useState("");
@@ -44,6 +44,8 @@
       const [response, setResponse] = useState(null);
       const [error, setError] = useState(null);
       const [loading, setLoading] = useState(false);
+      const [backendAvailable, setBackendAvailable] = useState(false);
+      const [forceBackend, setForceBackend] = useState(false);
       const [qrSku, setQrSku] = useState("");
       const [qrCode, setQrCode] = useState(null);
       const [qrLoading, setQrLoading] = useState(false);
@@ -52,6 +54,18 @@
       const [chainAnalysis, setChainAnalysis] = useState(null);
       const [routeInputAI, setRouteInputAI] = useState('1600 Amphitheatre Parkway, Mountain View, CA\n1 Infinite Loop, Cupertino, CA');
       const [routeResultAI, setRouteResultAI] = useState(null);
+
+      useEffect(() => {
+        // ping backend health on load
+        (async function(){
+          try {
+            const res = await fetch('http://localhost:5000/health');
+            if (res.ok) setBackendAvailable(true);
+          } catch (e) {
+            setBackendAvailable(false);
+          }
+        })();
+      }, []);
 
       async function handleSubmit(e) {
         e.preventDefault();
@@ -72,20 +86,10 @@
           action: "Inventory Update"
         };
 
-        try {
-          const res = await fetch("http://localhost:5000/api/add_sku", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(data)
-          });
-          if (!res.ok) throw new Error('Backend error');
-          const result = await res.json();
-          setResponse(result);
-        } catch (err) {
-          console.warn('Backend unavailable, using demo', err);
-          // Demo response for testing without backend
+        if (!(backendAvailable || forceBackend)) {
+          // skip network attempt if backend definitely unavailable
           setResponse({
-            message: "SKU added to blockchain with advanced insights",
+            message: "SKU added to blockchain with advanced insights (demo)",
             block_index: "demo-1",
             block_hash: "demo-hash-" + Date.now(),
             high_risk: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? 1 : 0,
@@ -98,8 +102,42 @@
             ]
           });
           setError("Using demo response (backend unavailable)");
-        } finally {
           setLoading(false);
+        } else {
+          try {
+            const res = await fetch("http://localhost:5000/api/add_sku", {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(()=>null);
+              setError(`Backend error: HTTP ${res.status}`);
+              setResponse({ error: text });
+            } else {
+              const result = await res.json();
+              setResponse(result);
+              setError(null);
+            }
+          } catch (err) {
+            console.error('Network error add_sku', err);
+            setError('Network error when contacting backend; using demo — ' + String(err));
+            setResponse({
+              message: "SKU added to blockchain with advanced insights (demo)",
+              block_index: "demo-1",
+              block_hash: "demo-hash-" + Date.now(),
+              high_risk: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? 1 : 0,
+              risk_probability: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? 0.72 : 0.28,
+              risk_percentage: data.lead_time_days > 30 && data.stock_level < data.monthly_sales / 2 ? "72%" : "28%",
+              top_risk_drivers: ["Long lead time", "Low safety stock"],
+              recommendations: [
+                { priority: "high", action: "Increase stock by 45%", reason: "Long lead time requires buffer", estimated_cost: "$5,400" },
+                { priority: "medium", action: "Enable real-time monitoring", reason: "Risk score 72%", estimated_cost: "Low" }
+              ]
+            });
+          } finally {
+            setLoading(false);
+          }
         }
       }
 
@@ -265,6 +303,12 @@
         <div>
           <h1>Remora Advanced SKU Tracker</h1>
           <p>AI-powered inventory risk assessment with blockchain integration</p>
+          <div style={{marginBottom:12}}>
+            <strong>Backend:</strong>&nbsp;
+            <span style={{color: backendAvailable ? 'green' : 'red'}}>{backendAvailable ? 'Available' : 'Unavailable'}</span>
+            &nbsp;&nbsp;
+            <label style={{fontSize:12}}><input type="checkbox" checked={forceBackend} onChange={e => setForceBackend(e.target.checked)} /> Force backend</label>
+          </div>
           
           <form onSubmit={handleSubmit}>
             <div>

@@ -181,8 +181,8 @@ scaler = StandardScaler()
 
 # -------- Flask App --------
 app = Flask(__name__)
-# Allow CORS for API routes from any origin (helpful for file:// or local dev)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# Allow CORS for all routes (development convenience)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 
 @app.before_request
@@ -191,6 +191,11 @@ def log_request_info():
         print(f"[REQ] {request.method} {request.path} from {request.remote_addr}")
     except Exception:
         pass
+
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok"})
 
 def heuristic_risk_prediction(features_df):
     """
@@ -576,4 +581,5 @@ if __name__ == '__main__':
     print("\nStarting Flask server on http://127.0.0.1:5000")
     print("Open http://127.0.0.1:5000 in your browser")
     print("="*60 + "\n")
-    app.run(debug=True)
+    # bind to all interfaces for testing from different clients
+    app.run(debug=True, host='0.0.0.0')
