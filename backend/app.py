@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from bigchaindb_driver import BigchainDB
+# from bigchaindb_driver import BigchainDB  # Commented out for mock
 import os
 
 app = FastAPI(title="Remora Backend API")
@@ -31,8 +31,8 @@ class User(Base):
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-# BigChainDB setup
-bdb = BigchainDB('http://localhost:9984')
+# BigChainDB mock (for development)
+# bdb = BigchainDB('http://localhost:9984')
 
 @app.get("/api/data")
 def get_data():
