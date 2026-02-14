@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node build.js",
     "serve": "serve .",
-    "dev": "esbuild index.tsx --bundle --outfile=dist/index.js --loader:.tsx=tsx --platform=browser --format=esm --external:react --external:react-dom --external:@google/genai --external:recharts --watch"
+    "dev": "esbuild index.tsx --bundle --outfile=dist/index.js --loader:.tsx=tsx --platform=browser --format=esm --external:react --external:react-dom --external:@google/genai --external:recharts --watch",
+    "start": "node server.js"
   },
   "dependencies": {
     "react": "^19.2.4",
@@ -18,4 +19,5 @@
     "esbuild": "^0.21.0",
     "serve": "^14.2.0"
   }
+
 }

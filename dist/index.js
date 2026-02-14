@@ -31,7 +31,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 var GeminiLogisticsService = class {
   ai;
   constructor() {
-    const apiKey = typeof process !== "undefined" && "AIzaSyBZQq1SdxNg5_9j5-8RMFlxzO-LuHVfPZE" ? "AIzaSyBZQq1SdxNg5_9j5-8RMFlxzO-LuHVfPZE" : window.GEMINI_API_KEY || "";
+    const apiKey = typeof process !== "undefined" && process.env.API_KEY ? process.env.API_KEY : window.GEMINI_API_KEY || "";
     if (!apiKey) {
       console.warn("Gemini API key not found. Set VITE_API_KEY in .env.local");
     }
