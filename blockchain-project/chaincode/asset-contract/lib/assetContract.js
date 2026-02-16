@@ -1,17 +1,27 @@
 'use strict'
 
-// Minimal Hyperledger Fabric chaincode placeholder for an Asset contract.
-// This is a stub and not functional end-to-end; it's intended as a starting point.
+const domain = require('./domain/assetDomain')
+
+// AssetContract keeps ledger interactions (ctx.stub) but delegates
+// domain rules and object construction to domain modules.
 class AssetContract {
   async initLedger(ctx) {
-    // populate ledger with initial data if required
-    console.log('initLedger called')
+    // Optionally populate ledger with initial data. Keep this minimal.
+    console.info('initLedger called')
   }
 
+  // createAsset expects a JSON string payload (to match many sample flows)
   async createAsset(ctx, id, assetJson) {
-    const asset = JSON.parse(assetJson)
-    await ctx.stub.putState(id, Buffer.from(JSON.stringify(asset)))
-    return asset
+    const parsed = JSON.parse(assetJson)
+    // ensure the domain object has the expected shape
+    const assetObj = domain.createAsset({ id, type: parsed.type, owner: parsed.owner, metadata: parsed.metadata || {} })
+    const validation = domain.validateAssetObject(assetObj)
+    if (!validation.valid) {
+      throw new Error(`invalid_asset: ${validation.reason}`)
+    }
+
+    await ctx.stub.putState(id, Buffer.from(JSON.stringify(assetObj)))
+    return assetObj
   }
 
   async readAsset(ctx, id) {
