@@ -1,0 +1,7 @@
+{
+  "name": "local-fabric",
+  "version": "1.0.0",
+  "organizations": {},
+  "orderers": {},
+  "peers": {}
+}
