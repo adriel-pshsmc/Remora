@@ -1,6 +1,6 @@
 import pandas as pd
 from sqlalchemy.orm import Session
-from app.models import SKU
+from ai_remora.models import SKU
 
 class SKUTracker:
 
