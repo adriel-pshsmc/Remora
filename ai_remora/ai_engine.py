@@ -1,21 +1,18 @@
-import requests
-from app.config import LITELLM_ENDPOINT, LITELLM_MASTER_KEY
+from openai import OpenAI
+from ai_remora.config import OPENAI_API_KEY
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 def ask_ai(prompt: str):
 
-    response = requests.post(
-        LITELLM_ENDPOINT,
-        headers={
-            "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "model": "universal-coder",
-            "messages": [
-                {"role": "system", "content": "You are an expert logistics AI strategist."},
-                {"role": "user", "content": prompt}
-            ]
-        }
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",  # Fast + cheap
+        messages=[
+            {"role": "system", "content": "You are an expert logistics AI strategist."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3
     )
 
-    return response.json()["choices"][0]["message"]["content"]
+    return response.choices[0].message.content
+

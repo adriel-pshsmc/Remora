@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float
-from app.database import Base
+from ai_remora.database import Base
 
 class SKU(Base):
     __tablename__ = "skus"
