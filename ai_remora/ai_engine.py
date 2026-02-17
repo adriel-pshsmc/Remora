@@ -16,3 +16,4 @@ def ask_ai(prompt: str):
 
     return response.choices[0].message.content
 
+print("Loaded Key:", OPENAI_API_KEY)
