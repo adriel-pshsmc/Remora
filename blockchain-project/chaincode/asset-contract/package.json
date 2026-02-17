@@ -1,7 +1,0 @@
-{
-  "name": "asset-contract",
-  "version": "0.0.1",
-  "main": "lib/assetContract.js",
-  "license": "MIT",
-  "description": "Minimal asset chaincode placeholder for Hyperledger Fabric"
-}
