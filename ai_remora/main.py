@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
-from ai_remora.config import OPENAI_API_KEY
-from ai_remora.database import SessionLocal, engine, Base
-from ai_remora.models import SKU
-from ai_remora.sku_engine import SKUTracker
-from ai_remora.blockchain import SimpleBlockchain
-from ai_remora.reccomendation_engine import generate_recommendations
+from config import OPENAI_API_KEY
+from database import SessionLocal, engine, Base
+from models import SKU
+from sku_engine import SKUTracker
+from blockchain import SimpleBlockchain
+from reccomendation_engine import generate_recommendations
 
 app = FastAPI(title="Remora AI Logistics Engine")
 
