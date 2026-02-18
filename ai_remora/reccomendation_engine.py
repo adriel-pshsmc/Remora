@@ -1,4 +1,4 @@
-from ai_remora.ai_engine import ask_ai
+from ai_engine import ask_ai
 
 def generate_recommendations(df):
 
